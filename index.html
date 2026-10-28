@@ -1253,7 +1253,7 @@ async function cargarUsers(){
   allUsers=data||[];
 }
 async function cargarSecciones(){
-  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo),profiles!docente_id(nombre,email)').order('codigo_seccion');
+  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo),docente:profiles!docente_id(nombre,email)').order('codigo_seccion');
   allSecciones=data||[];
 }
 async function cargarInscripciones(){
@@ -1431,7 +1431,7 @@ function renderTablaSecciones(){
   const byDocente={};
   // Ordenar secciones: docente nombre, luego asignatura nombre, luego codigo_seccion
   const secOrdenadas=[...allSecciones].sort((a,b)=>{
-    const da=(a.profiles?.nombre||'ZZZ').localeCompare(b.profiles?.nombre||'ZZZ','es');
+    const da=(a.docente?.nombre||'ZZZ').localeCompare(b.docente?.nombre||'ZZZ','es');
     if(da!==0)return da;
     const aa=(a.asignaturas?.nombre||'ZZZ').localeCompare(b.asignaturas?.nombre||'ZZZ','es');
     if(aa!==0)return aa;
@@ -1439,7 +1439,7 @@ function renderTablaSecciones(){
   });
   secOrdenadas.forEach(s=>{
     const dKey=s.docente_id||'sin-docente';
-    if(!byDocente[dKey])byDocente[dKey]={nombre:s.profiles?.nombre||'Sin docente asignado',email:s.profiles?.email||'',asigs:{}};
+    if(!byDocente[dKey])byDocente[dKey]={nombre:s.docente?.nombre||'Sin docente asignado',email:s.docente?.email||'',asigs:{}};
     const aKey=s.asignatura_id||'sin-asig';
     if(!byDocente[dKey].asigs[aKey])byDocente[dKey].asigs[aKey]={nombre:s.asignaturas?.nombre||'Sin asignatura',codigo:s.asignaturas?.codigo||'',secciones:[]};
     byDocente[dKey].asigs[aKey].secciones.push(s);
