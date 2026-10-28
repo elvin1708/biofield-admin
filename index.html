@@ -1245,7 +1245,7 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 
 // ===== DATOS =====
 async function cargarObs(){
-  const {data}=await sb.from('observaciones').select('*,profiles(nombre,email),secciones(codigo_seccion)').order('creado_en',{ascending:false});
+  const {data}=await sb.from('observaciones').select('*,profiles!estudiante_id(nombre,email),secciones!seccion_id(codigo_seccion)').order('creado_en',{ascending:false});
   allObs=data||[];
 }
 async function cargarUsers(){
