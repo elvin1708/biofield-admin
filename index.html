@@ -906,13 +906,13 @@ a.cf-link:hover #ceit-footer .cf-plate { box-shadow: 0 0 0 1px rgba(255,255,255,
 
       <!-- SECCIONES -->
       <div class="page-section" id="sec-secciones">
-        <div class="page-header"><div class="page-title">📚 Secciones</div><div class="page-sub">Secciones académicas del sistema</div></div>
+        <div class="page-header"><div class="page-title">📚 Clases y Secciones</div><div class="page-sub">Asignaturas, secciones y estudiantes inscritos</div></div>
         <div class="card">
           <div class="card-header">
-            <span class="card-title">Secciones activas</span>
+            <span class="card-title">Organización académica</span>
             <button class="btn-sm gold" onclick="exportarSeccionesExcel()">📥 Excel</button>
           </div>
-          <div id="tabla-secciones"><div class="spinner">⏳ Cargando secciones...</div></div>
+          <div id="tabla-secciones"><div class="spinner">⏳ Cargando...</div></div>
         </div>
 
       <div class="footer-area">
@@ -1202,7 +1202,7 @@ const { createClient } = supabase;
 const sb = createClient(SUPA_URL, SUPA_KEY);
 
 // ===== ESTADO =====
-let allObs=[], allUsers=[], allSecciones=[], obsFiltradas=[];
+let allObs=[], allUsers=[], allSecciones=[], allInscripciones=[], obsFiltradas=[];
 let mapR=null, mapL=null;
 let chartSec=null, chartMes=null, chartEsp=null, chartCli=null, chartRol=null;
 
@@ -1232,7 +1232,7 @@ async function iniciarApp(user,p){
   document.getElementById('user-initials').textContent=nombre.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase();
   document.getElementById('user-badge').textContent=p?.perfil==='Superusuario'?'Superusuario':'Admin';
   document.getElementById('fecha-hoy').textContent=new Date().toLocaleDateString('es-HN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  await Promise.all([cargarObs(),cargarUsers(),cargarSecciones()]);
+  await Promise.all([cargarObs(),cargarUsers(),cargarSecciones(),cargarInscripciones()]);
   renderKPIs();
   renderMapaResumen();
   renderUsersMini();
@@ -1255,6 +1255,10 @@ async function cargarUsers(){
 async function cargarSecciones(){
   const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo)').order('codigo_seccion');
   allSecciones=data||[];
+}
+async function cargarInscripciones(){
+  const {data}=await sb.from('inscripciones').select('*,profiles!estudiante_id(nombre,email)').order('creado_en');
+  allInscripciones=data||[];
 }
 
 // ===== KPIs =====
@@ -1419,16 +1423,58 @@ function filtrarUsuarios(){
   renderTablaUsers(allUsers.filter(u=>(!q||(u.nombre||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q))&&(!rol||u.rol===rol)));
 }
 
-// ===== TABLA SECCIONES =====
+// ===== TABLA SECCIONES (vista jerárquica) =====
 function renderTablaSecciones(){
-  if(!allSecciones.length){document.getElementById('tabla-secciones').innerHTML='<div class="empty">Sin secciones.</div>';return;}
-  let h='<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Código</th><th>Asignatura</th><th>Código acceso</th><th>Observaciones</th></tr></thead><tbody>';
+  const el=document.getElementById('tabla-secciones');
+  if(!allSecciones.length){el.innerHTML='<div class="empty">Sin secciones registradas.</div>';return;}
+  // Agrupar secciones por asignatura
+  const byAsig={};
   allSecciones.forEach(s=>{
-    const cnt=allObs.filter(o=>o.seccion_id===s.id).length;
-    h+='<tr><td><b>'+(s.codigo_seccion||'—')+'</b></td><td>'+(s.asignaturas?.nombre||'—')+' <span style="font-size:10px;color:var(--text-muted)">'+(s.asignaturas?.codigo||'')+'</span></td><td><code style="background:var(--gray-bg);padding:2px 6px;border-radius:4px;font-size:11px">'+(s.codigo_acceso||'—')+'</code></td><td>'+cnt+'</td></tr>';
+    const key=s.asignatura_id||'sin';
+    if(!byAsig[key])byAsig[key]={nombre:s.asignaturas?.nombre||'Sin asignatura',codigo:s.asignaturas?.codigo||'',secciones:[]};
+    byAsig[key].secciones.push(s);
   });
-  h+='</tbody></table></div>';
-  document.getElementById('tabla-secciones').innerHTML=h;
+  let h='';
+  Object.values(byAsig).forEach(asig=>{
+    h+='<div style="margin-bottom:20px">';
+    h+='<div style="background:var(--azul);color:#fff;padding:10px 16px;border-radius:8px 8px 0 0;font-weight:700;font-size:14px">📘 '+asig.nombre+(asig.codigo?' <span style="font-weight:400;font-size:11px;opacity:.8">('+asig.codigo+')</span>':'')+'</div>';
+    asig.secciones.forEach(s=>{
+      const inscritos=allInscripciones.filter(i=>i.seccion_id===s.id);
+      const obsCount=allObs.filter(o=>o.seccion_id===s.id).length;
+      h+='<div style="border:1px solid var(--border);border-top:none;padding:12px 16px;background:var(--card-bg)">';
+      h+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+      h+='<div><span style="font-weight:600;color:var(--azul)">📂 Sección '+s.codigo_seccion+'</span>';
+      h+=' &nbsp;<code style="background:var(--gray-bg);padding:2px 6px;border-radius:4px;font-size:11px">🔑 '+s.codigo_acceso+'</code>';
+      h+=' &nbsp;<span style="font-size:11px;color:var(--text-muted)">'+inscritos.length+' estudiante'+(inscritos.length!==1?'s':'')+' · '+obsCount+' obs.</span></div>';
+      h+='<button onclick="eliminarSeccion(\''+s.id+'\',\''+s.codigo_seccion+'\')" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:600">🗑 Eliminar sección</button>';
+      h+='</div>';
+      if(inscritos.length){
+        h+='<div style="margin-top:10px;overflow-x:auto"><table class="data-table" style="margin:0"><thead><tr><th>Estudiante</th><th>Correo</th><th>Obs. registradas</th></tr></thead><tbody>';
+        inscritos.forEach(i=>{
+          const obsEst=allObs.filter(o=>o.estudiante_id===i.estudiante_id&&o.seccion_id===s.id).length;
+          h+='<tr><td>'+( i.profiles?.nombre||'—')+'</td><td style="font-size:11px;color:var(--text-muted)">'+(i.profiles?.email||'—')+'</td><td>'+obsEst+'</td></tr>';
+        });
+        h+='</tbody></table></div>';
+      } else {
+        h+='<div style="margin-top:8px;font-size:12px;color:var(--text-muted);font-style:italic">Sin estudiantes inscritos aún.</div>';
+      }
+      h+='</div>';
+    });
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+async function eliminarSeccion(id, codigo){
+  if(!confirm('¿Eliminar la sección "'+codigo+'"?\n\nEsto también eliminará sus inscripciones. Las observaciones quedarán sin sección asignada.'))return;
+  // Primero eliminar inscripciones de la sección
+  await sb.from('inscripciones').delete().eq('seccion_id',id);
+  const {error}=await sb.from('secciones').delete().eq('id',id);
+  if(error){alert('Error al eliminar: '+error.message);return;}
+  alert('Sección "'+codigo+'" eliminada correctamente.');
+  await Promise.all([cargarSecciones(),cargarInscripciones(),cargarObs()]);
+  renderTablaSecciones();
+  renderKPIs();
 }
 
 // ===== EXPORTAR =====
@@ -1468,7 +1514,7 @@ function showSection(id){
   document.querySelectorAll('.nav-item').forEach(n=>{if(n.getAttribute('onclick')?.includes("'"+id+"'"))n.classList.add('active');});
   if(id==='mapa')setTimeout(renderMapaLive,120);
   if(id==='usuarios')renderTablaUsers(allUsers);
-  if(id==='secciones')renderTablaSecciones();
+  if(id==='secciones'){cargarInscripciones().then(renderTablaSecciones);}
   if(id==='estadisticas')setTimeout(renderEstadisticas,120);
 }
 
