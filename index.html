@@ -1253,7 +1253,7 @@ async function cargarUsers(){
   allUsers=data||[];
 }
 async function cargarSecciones(){
-  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo)').order('codigo_seccion');
+  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo),profiles!docente_id(nombre,email)').order('codigo_seccion');
   allSecciones=data||[];
 }
 async function cargarInscripciones(){
@@ -1427,18 +1427,34 @@ function filtrarUsuarios(){
 function renderTablaSecciones(){
   const el=document.getElementById('tabla-secciones');
   if(!allSecciones.length){el.innerHTML='<div class="empty">Sin secciones registradas.</div>';return;}
-  // Agrupar secciones por asignatura
-  const byAsig={};
-  allSecciones.forEach(s=>{
-    const key=s.asignatura_id||'sin';
-    if(!byAsig[key])byAsig[key]={nombre:s.asignaturas?.nombre||'Sin asignatura',codigo:s.asignaturas?.codigo||'',secciones:[]};
-    byAsig[key].secciones.push(s);
+  // Agrupar por docente → asignatura → secciones
+  const byDocente={};
+  // Ordenar secciones: docente nombre, luego asignatura nombre, luego codigo_seccion
+  const secOrdenadas=[...allSecciones].sort((a,b)=>{
+    const da=(a.profiles?.nombre||'ZZZ').localeCompare(b.profiles?.nombre||'ZZZ','es');
+    if(da!==0)return da;
+    const aa=(a.asignaturas?.nombre||'ZZZ').localeCompare(b.asignaturas?.nombre||'ZZZ','es');
+    if(aa!==0)return aa;
+    return (a.codigo_seccion||'').localeCompare(b.codigo_seccion||'','es');
+  });
+  secOrdenadas.forEach(s=>{
+    const dKey=s.docente_id||'sin-docente';
+    if(!byDocente[dKey])byDocente[dKey]={nombre:s.profiles?.nombre||'Sin docente asignado',email:s.profiles?.email||'',asigs:{}};
+    const aKey=s.asignatura_id||'sin-asig';
+    if(!byDocente[dKey].asigs[aKey])byDocente[dKey].asigs[aKey]={nombre:s.asignaturas?.nombre||'Sin asignatura',codigo:s.asignaturas?.codigo||'',secciones:[]};
+    byDocente[dKey].asigs[aKey].secciones.push(s);
   });
   let h='';
-  Object.values(byAsig).forEach(asig=>{
-    h+='<div style="margin-bottom:20px">';
-    h+='<div style="background:var(--azul);color:#fff;padding:10px 16px;border-radius:8px 8px 0 0;font-weight:700;font-size:14px">📘 '+asig.nombre+(asig.codigo?' <span style="font-weight:400;font-size:11px;opacity:.8">('+asig.codigo+')</span>':'')+'</div>';
-    asig.secciones.forEach(s=>{
+  Object.values(byDocente).forEach(doc=>{
+    h+='<div style="margin-bottom:28px">';
+    // Cabecera docente
+    h+='<div style="background:var(--azul);color:#fff;padding:10px 16px;border-radius:8px 8px 0 0;font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px">';
+    h+='👨‍🏫 '+doc.nombre;
+    if(doc.email)h+=' <span style="font-weight:400;font-size:11px;opacity:.7">'+doc.email+'</span>';
+    h+='</div>';
+    Object.values(doc.asigs).forEach(asig=>{
+      h+='<div style="border:1px solid var(--border);border-top:none;background:var(--azul-light);padding:8px 16px;font-weight:600;font-size:13px;color:var(--azul)">📘 '+asig.nombre+(asig.codigo?' <span style="font-weight:400;font-size:11px;color:var(--text-muted)">('+asig.codigo+')</span>':'')+'</div>';
+      asig.secciones.forEach(s=>{
       const inscritos=allInscripciones.filter(i=>i.seccion_id===s.id);
       const obsCount=allObs.filter(o=>o.seccion_id===s.id).length;
       h+='<div style="border:1px solid var(--border);border-top:none;padding:12px 16px;background:var(--card-bg)">';
@@ -1458,9 +1474,10 @@ function renderTablaSecciones(){
       } else {
         h+='<div style="margin-top:8px;font-size:12px;color:var(--text-muted);font-style:italic">Sin estudiantes inscritos aún.</div>';
       }
-      h+='</div>';
-    });
-    h+='</div>';
+      h+='</div>'; // cierra sección
+      });
+    }); // cierra asignaturas
+    h+='</div>'; // cierra docente
   });
   el.innerHTML=h;
 }
@@ -1489,7 +1506,7 @@ function dlExcel(rows,sheet,fname){
 }
 function exportarObsExcel(){dlExcel(obsToRows(obsFiltradas.length?obsFiltradas:allObs),'Observaciones','BioField_Observaciones');}
 function exportarUsersExcel(){dlExcel(allUsers.map(u=>({'Nombre':u.nombre||'','Correo':u.email||'','Rol':u.rol||'','Perfil':u.perfil||''})),'Usuarios','BioField_Usuarios');}
-function exportarSeccionesExcel(){dlExcel(allSecciones.map(s=>({'Código':s.codigo||'','Asignatura':s.asignaturas?.nombre||'','Cód. asignatura':s.asignaturas?.codigo||'','Código acceso':s.codigo_acceso||''})),'Secciones','BioField_Secciones');}
+function exportarSeccionesExcel(){dlExcel(allSecciones.map(s=>({'Docente':s.profiles?.nombre||'','Asignatura':s.asignaturas?.nombre||'','Cód. asignatura':s.asignaturas?.codigo||'','Sección':s.codigo_seccion||'','Código acceso':s.codigo_acceso||'','Estudiantes':allInscripciones.filter(i=>i.seccion_id===s.id).length,'Observaciones':allObs.filter(o=>o.seccion_id===s.id).length})),'Secciones','BioField_Secciones');}
 function exportarSeccionExcel(){const cod=document.getElementById('export-seccion').value;dlExcel(obsToRows(allObs.filter(o=>!cod||o.secciones?.codigo_seccion===cod)),'Sección '+(cod||'Todas'),'BioField_Sec_'+(cod||'todas'));}
 
 function exportarObsPDF(){
