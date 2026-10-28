@@ -1245,7 +1245,7 @@ async function doLogout(){await sb.auth.signOut();location.reload();}
 
 // ===== DATOS =====
 async function cargarObs(){
-  const {data}=await sb.from('observaciones').select('*,profiles(nombre,email),secciones(codigo)').order('creado_en',{ascending:false});
+  const {data}=await sb.from('observaciones').select('*,profiles(nombre,email),secciones(codigo_seccion)').order('creado_en',{ascending:false});
   allObs=data||[];
 }
 async function cargarUsers(){
@@ -1253,7 +1253,7 @@ async function cargarUsers(){
   allUsers=data||[];
 }
 async function cargarSecciones(){
-  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo)').order('codigo');
+  const {data}=await sb.from('secciones').select('*,asignaturas(nombre,codigo_seccion:codigo)').order('codigo_seccion');
   allSecciones=data||[];
 }
 
@@ -1322,7 +1322,7 @@ function renderUsersMini(){
 // ===== CHART SECCIONES =====
 function renderChartSec(){
   const m={};
-  allObs.forEach(o=>{const c=o.secciones?.codigo||'Sin sección';m[c]=(m[c]||0)+1;});
+  allObs.forEach(o=>{const c=o.secciones?.codigo_seccion||'Sin sección';m[c]=(m[c]||0)+1;});
   if(chartSec)chartSec.destroy();
   chartSec=new Chart(document.getElementById('chart-secciones').getContext('2d'),{
     type:'bar',
@@ -1373,7 +1373,7 @@ function renderTablaObs(obs){
   if(!obs.length){document.getElementById('tabla-obs').innerHTML='<div class="empty"><div class="empty-icon">🌿</div>Sin observaciones para los filtros.</div>';return;}
   let h='<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Especie común</th><th>Nombre científico</th><th>Sección</th><th>Observador</th><th>Temp/Humedad</th><th>Fecha</th><th>Foto</th></tr></thead><tbody>';
   obs.forEach(o=>{
-    h+='<tr><td><b>'+(o.nombre_comun||'—')+'</b></td><td><i style="color:var(--text-muted)">'+(o.nombre_cientifico||'—')+'</i></td><td>'+(o.secciones?.codigo||'—')+'</td><td>'+(o.profiles?.nombre||'—')+'</td><td style="font-size:11px;color:var(--text-muted)">'+(o.temperatura?o.temperatura+'°C':'—')+' / '+(o.humedad?o.humedad+'%':'—')+'</td><td style="font-size:11px;white-space:nowrap">'+new Date(o.creado_en).toLocaleDateString('es-HN')+'</td><td>'+(o.foto_url?'<a href="'+o.foto_url+'" target="_blank" style="color:var(--verde)">📷 Ver</a>':'—')+'</td></tr>';
+    h+='<tr><td><b>'+(o.nombre_comun||'—')+'</b></td><td><i style="color:var(--text-muted)">'+(o.nombre_cientifico||'—')+'</i></td><td>'+(o.secciones?.codigo_seccion||'—')+'</td><td>'+(o.profiles?.nombre||'—')+'</td><td style="font-size:11px;color:var(--text-muted)">'+(o.temperatura?o.temperatura+'°C':'—')+' / '+(o.humedad?o.humedad+'%':'—')+'</td><td style="font-size:11px;white-space:nowrap">'+new Date(o.creado_en).toLocaleDateString('es-HN')+'</td><td>'+(o.foto_url?'<a href="'+o.foto_url+'" target="_blank" style="color:var(--verde)">📷 Ver</a>':'—')+'</td></tr>';
   });
   h+='</tbody></table></div>';
   document.getElementById('tabla-obs').innerHTML=h;
@@ -1386,7 +1386,7 @@ function filtrarObservaciones(){
   const corte=dias?new Date(Date.now()-dias*864e5).toISOString():null;
   obsFiltradas=allObs.filter(o=>{
     const mq=!q||(o.nombre_comun||'').toLowerCase().includes(q)||(o.nombre_cientifico||'').toLowerCase().includes(q);
-    const ms=!sec||o.secciones?.codigo===sec;
+    const ms=!sec||o.secciones?.codigo_seccion===sec;
     const mf=!corte||o.creado_en>=corte;
     return mq&&ms&&mf;
   });
@@ -1394,7 +1394,7 @@ function filtrarObservaciones(){
 }
 
 function poblarSelects(){
-  const secs=[...new Set(allObs.map(o=>o.secciones?.codigo).filter(Boolean))].sort();
+  const secs=[...new Set(allObs.map(o=>o.secciones?.codigo_seccion).filter(Boolean))].sort();
   const s1=document.getElementById('obs-seccion');
   const s2=document.getElementById('export-seccion');
   s1.innerHTML='<option value="">Todas las secciones</option>';
@@ -1425,7 +1425,7 @@ function renderTablaSecciones(){
   let h='<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Código</th><th>Asignatura</th><th>Código acceso</th><th>Observaciones</th></tr></thead><tbody>';
   allSecciones.forEach(s=>{
     const cnt=allObs.filter(o=>o.seccion_id===s.id).length;
-    h+='<tr><td><b>'+(s.codigo||'—')+'</b></td><td>'+(s.asignaturas?.nombre||'—')+' <span style="font-size:10px;color:var(--text-muted)">'+(s.asignaturas?.codigo||'')+'</span></td><td><code style="background:var(--gray-bg);padding:2px 6px;border-radius:4px;font-size:11px">'+(s.codigo_acceso||'—')+'</code></td><td>'+cnt+'</td></tr>';
+    h+='<tr><td><b>'+(s.codigo_seccion||'—')+'</b></td><td>'+(s.asignaturas?.nombre||'—')+' <span style="font-size:10px;color:var(--text-muted)">'+(s.asignaturas?.codigo||'')+'</span></td><td><code style="background:var(--gray-bg);padding:2px 6px;border-radius:4px;font-size:11px">'+(s.codigo_acceso||'—')+'</code></td><td>'+cnt+'</td></tr>';
   });
   h+='</tbody></table></div>';
   document.getElementById('tabla-secciones').innerHTML=h;
@@ -1433,7 +1433,7 @@ function renderTablaSecciones(){
 
 // ===== EXPORTAR =====
 function obsToRows(obs){
-  return obs.map(o=>({'Especie común':o.nombre_comun||'','Nombre científico':o.nombre_cientifico||'','Descripción':o.descripcion||'','Sección':o.secciones?.codigo||'','Observador':o.profiles?.nombre||'','Latitud':o.latitud||'','Longitud':o.longitud||'','Temp (°C)':o.temperatura||'','Humedad (%)':o.humedad||'','Clima':o.condicion_climatica||'','Fecha':new Date(o.creado_en).toLocaleDateString('es-HN'),'Foto URL':o.foto_url||''}));
+  return obs.map(o=>({'Especie común':o.nombre_comun||'','Nombre científico':o.nombre_cientifico||'','Descripción':o.descripcion||'','Sección':o.secciones?.codigo_seccion||'','Observador':o.profiles?.nombre||'','Latitud':o.latitud||'','Longitud':o.longitud||'','Temp (°C)':o.temperatura||'','Humedad (%)':o.humedad||'','Clima':o.condicion_climatica||'','Fecha':new Date(o.creado_en).toLocaleDateString('es-HN'),'Foto URL':o.foto_url||''}));
 }
 function dlExcel(rows,sheet,fname){
   const ws=XLSX.utils.json_to_sheet(rows);
@@ -1444,7 +1444,7 @@ function dlExcel(rows,sheet,fname){
 function exportarObsExcel(){dlExcel(obsToRows(obsFiltradas.length?obsFiltradas:allObs),'Observaciones','BioField_Observaciones');}
 function exportarUsersExcel(){dlExcel(allUsers.map(u=>({'Nombre':u.nombre||'','Correo':u.email||'','Rol':u.rol||'','Perfil':u.perfil||''})),'Usuarios','BioField_Usuarios');}
 function exportarSeccionesExcel(){dlExcel(allSecciones.map(s=>({'Código':s.codigo||'','Asignatura':s.asignaturas?.nombre||'','Cód. asignatura':s.asignaturas?.codigo||'','Código acceso':s.codigo_acceso||''})),'Secciones','BioField_Secciones');}
-function exportarSeccionExcel(){const cod=document.getElementById('export-seccion').value;dlExcel(obsToRows(allObs.filter(o=>!cod||o.secciones?.codigo===cod)),'Sección '+(cod||'Todas'),'BioField_Sec_'+(cod||'todas'));}
+function exportarSeccionExcel(){const cod=document.getElementById('export-seccion').value;dlExcel(obsToRows(allObs.filter(o=>!cod||o.secciones?.codigo_seccion===cod)),'Sección '+(cod||'Todas'),'BioField_Sec_'+(cod||'todas'));}
 
 function exportarObsPDF(){
   const {jsPDF}=window.jspdf;
@@ -1453,11 +1453,11 @@ function exportarObsPDF(){
   doc.text('BioField UNAH — Informe de Observaciones',14,16);
   doc.setFontSize(9);doc.setTextColor(100,100,100);
   doc.text('Escuela de Biología · CEITICB · '+new Date().toLocaleDateString('es-HN'),14,23);
-  const rows=(obsFiltradas.length?obsFiltradas:allObs).map(o=>[o.nombre_comun||'—',o.nombre_cientifico||'—',o.secciones?.codigo||'—',o.profiles?.nombre||'—',o.temperatura?o.temperatura+'°C':'—',new Date(o.creado_en).toLocaleDateString('es-HN')]);
+  const rows=(obsFiltradas.length?obsFiltradas:allObs).map(o=>[o.nombre_comun||'—',o.nombre_cientifico||'—',o.secciones?.codigo_seccion||'—',o.profiles?.nombre||'—',o.temperatura?o.temperatura+'°C':'—',new Date(o.creado_en).toLocaleDateString('es-HN')]);
   doc.autoTable({head:[['Especie común','Nombre científico','Sección','Observador','Temp.','Fecha']],body:rows,startY:28,styles:{fontSize:8},headStyles:{fillColor:[26,35,126]}});
   doc.save('BioField_Observaciones_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
-function exportarSeccionPDF(){const cod=document.getElementById('export-seccion').value;obsFiltradas=allObs.filter(o=>!cod||o.secciones?.codigo===cod);exportarObsPDF();}
+function exportarSeccionPDF(){const cod=document.getElementById('export-seccion').value;obsFiltradas=allObs.filter(o=>!cod||o.secciones?.codigo_seccion===cod);exportarObsPDF();}
 
 // ===== NAVEGACIÓN =====
 function showSection(id){
