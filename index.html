@@ -1146,7 +1146,19 @@ a.cf-link:hover #ceit-footer .cf-plate { box-shadow: 0 0 0 1px rgba(255,255,255,
 
       <!-- EXPORTAR -->
       <div class="page-section" id="sec-exportar">
-        <div class="page-header"><div class="page-title">⬇️ Exportar datos</div><div class="page-sub">Descarga datos en Excel o PDF por sección</div></div>
+        <div class="page-header"><div class="page-title">⬇️ Exportar y respaldo</div><div class="page-sub">Descarga datos, genera respaldos completos y gestiona la limpieza</div></div>
+
+        <!-- BACKUP COMPLETO -->
+        <div class="card" style="margin-bottom:16px;border:2px solid var(--verde)">
+          <div class="card-header" style="background:linear-gradient(135deg,#f0fdf4,#dcfce7)">
+            <span class="card-title" style="color:#15803d">💾 Respaldo completo (todas las tablas)</span>
+          </div>
+          <div style="padding:4px 0 8px 0">
+            <div style="font-size:12px;color:var(--text-muted);padding:0 4px 12px 4px">Genera un archivo Excel con <b>todas las tablas</b> en hojas separadas: Observaciones, Usuarios, Asignaturas, Secciones e Inscripciones. Ideal para archivar al final de cada período.</div>
+            <button class="btn-sm verde" style="padding:12px 20px;font-size:14px;width:100%" onclick="exportarBackupCompleto()">💾 Descargar respaldo completo (.xlsx)</button>
+          </div>
+        </div>
+
         <div class="grid-2">
           <div class="card">
             <div class="card-header"><span class="card-title">📥 Por sección</span></div>
@@ -1158,11 +1170,40 @@ a.cf-link:hover #ceit-footer .cf-plate { box-shadow: 0 0 0 1px rgba(255,255,255,
             </div>
           </div>
           <div class="card">
-            <div class="card-header"><span class="card-title">📥 Todo el dataset</span></div>
+            <div class="card-header"><span class="card-title">📥 Por tabla</span></div>
             <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
-              <button class="btn-sm gold" style="padding:10px" onclick="exportarObsExcel()">📥 Todas las observaciones (Excel)</button>
-              <button class="btn-sm" style="padding:10px" onclick="exportarUsersExcel()">📥 Todos los usuarios (Excel)</button>
-              <button class="btn-sm verde" style="padding:10px" onclick="exportarObsPDF()">📄 Informe completo (PDF)</button>
+              <button class="btn-sm gold" style="padding:10px" onclick="exportarObsExcel()">📥 Observaciones (Excel)</button>
+              <button class="btn-sm gold" style="padding:10px" onclick="exportarUsersExcel()">📥 Usuarios (Excel)</button>
+              <button class="btn-sm gold" style="padding:10px" onclick="exportarSeccionesExcel()">📥 Secciones (Excel)</button>
+              <button class="btn-sm" style="padding:10px" onclick="exportarObsPDF()">📄 Informe completo (PDF)</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIMPIEZA -->
+        <div class="grid-2" style="margin-top:16px">
+          <div class="card" style="border:2px solid #f97316">
+            <div class="card-header" style="background:#fff7ed">
+              <span class="card-title" style="color:#c2410c">🧹 Vaciar papelera</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Elimina permanentemente todos los elementos que están en la Papelera. <b>Esta acción no se puede deshacer.</b></div>
+            <div id="papelera-resumen-exportar" style="font-size:12px;color:var(--text-muted);margin-bottom:12px;font-style:italic">Calculando…</div>
+            <button class="btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:10px;width:100%;font-weight:700" onclick="vaciarPapeleraCompleta()">🗑 Vaciar papelera completa</button>
+          </div>
+          <div class="card" style="border:2px solid #f97316">
+            <div class="card-header" style="background:#fff7ed">
+              <span class="card-title" style="color:#c2410c">📦 Archivar observaciones antiguas</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Descarga como respaldo y luego elimina observaciones de períodos anteriores. Selecciona el corte:</div>
+            <select id="archivo-corte" style="padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;width:100%;margin-bottom:10px">
+              <option value="90">Anteriores a 90 días (1 período)</option>
+              <option value="180">Anteriores a 180 días (2 períodos)</option>
+              <option value="365">Anteriores a 1 año</option>
+            </select>
+            <div id="archivo-preview" style="font-size:12px;color:var(--text-muted);margin-bottom:10px;font-style:italic">Seleccione corte para previsualizar.</div>
+            <div style="display:flex;gap:8px">
+              <button class="btn-sm gold" style="padding:9px;flex:1" onclick="previewArchivar()">🔍 Previsualizar</button>
+              <button class="btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;padding:9px;flex:1;font-weight:700" onclick="archivarObsAntiguas()">📦 Archivar y eliminar</button>
             </div>
           </div>
         </div>
@@ -1651,6 +1692,7 @@ async function cargarPapelera(){
   renderPapeleraAsignaturas();
   renderPapeleraSecciones();
   actualizarBadgePapelera();
+  actualizarResumenPapelera();
 }
 
 function actualizarBadgePapelera(){
@@ -1793,6 +1835,112 @@ function exportarObsPDF(){
 }
 function exportarSeccionPDF(){const cod=document.getElementById('export-seccion').value;obsFiltradas=allObs.filter(o=>!cod||o.secciones?.codigo_seccion===cod);exportarObsPDF();}
 
+// ===== BACKUP COMPLETO =====
+function exportarBackupCompleto(){
+  const wb=XLSX.utils.book_new();
+  // Hoja 1: Observaciones
+  const obsRows=obsToRows(allObs);
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(obsRows.length?obsRows:[{}]),'Observaciones');
+  // Hoja 2: Usuarios
+  const usersRows=allUsers.map(u=>({'Nombre':u.nombre||'','Correo':u.email||'','Rol':u.rol||'','Perfil':u.perfil||'','Creado':u.created_at?new Date(u.created_at).toLocaleDateString('es-HN'):''}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(usersRows.length?usersRows:[{}]),'Usuarios');
+  // Hoja 3: Asignaturas
+  const asigRows=allAsignaturas.map(a=>({'Nombre':a.nombre||'','Código':a.codigo||'','Descripción':a.descripcion||'','Creado':a.creado_en?new Date(a.creado_en).toLocaleDateString('es-HN'):''}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(asigRows.length?asigRows:[{}]),'Asignaturas');
+  // Hoja 4: Secciones activas
+  const secRows=allSecciones.map(s=>({'Docente':s.docente?.nombre||'','Email docente':s.docente?.email||'','Asignatura':s.asignaturas?.nombre||'','Cód. asignatura':s.asignaturas?.codigo||'','Sección':s.codigo_seccion||'','Código acceso':s.codigo_acceso||'','Período':s.periodo||'','Estudiantes inscritos':allInscripciones.filter(i=>i.seccion_id===s.id).length,'Observaciones':allObs.filter(o=>o.seccion_id===s.id).length}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(secRows.length?secRows:[{}]),'Secciones');
+  // Hoja 5: Inscripciones
+  const insRows=allInscripciones.map(i=>{
+    const sec=allSecciones.find(s=>s.id===i.seccion_id);
+    const usr=allUsers.find(u=>u.id===i.estudiante_id);
+    return {'Estudiante':usr?.nombre||i.estudiante_id||'','Email':usr?.email||'','Sección':sec?.codigo_seccion||i.seccion_id||'','Asignatura':sec?.asignaturas?.nombre||'','Inscrito':i.creado_en?new Date(i.creado_en).toLocaleDateString('es-HN'):''};
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(insRows.length?insRows:[{}]),'Inscripciones');
+  // Hoja 6: Papelera (si hay elementos)
+  if(papeleraAsignaturas.length||papeleraSecciones.length){
+    const papRows=[
+      ...papeleraAsignaturas.map(a=>({'Tipo':'Asignatura','Nombre':a.nombre||'','Código':a.codigo||'','Eliminado el':a.eliminado_en?new Date(a.eliminado_en).toLocaleDateString('es-HN'):''})),
+      ...papeleraSecciones.map(s=>({'Tipo':'Sección','Nombre':s.codigo_seccion||'','Código':'','Eliminado el':s.eliminado_en?new Date(s.eliminado_en).toLocaleDateString('es-HN'):''}))
+    ];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(papRows),'Papelera');
+  }
+  const fecha=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,'BioField_Respaldo_Completo_'+fecha+'.xlsx');
+}
+
+// ===== VACIAR PAPELERA =====
+async function vaciarPapeleraCompleta(){
+  const total=papeleraAsignaturas.length+papeleraSecciones.length;
+  if(total===0){alert('ℹ️ La papelera ya está vacía.');return;}
+  if(!confirm('⚠️ ¿Vaciar la papelera?\n\nSe eliminarán permanentemente:\n  • '+papeleraAsignaturas.length+' asignatura(s)\n  • '+papeleraSecciones.length+' sección(es)\n\nEsta acción NO se puede deshacer.'))return;
+  if(!confirm('🔴 CONFIRMACIÓN FINAL\n\n¿Está seguro? Todos los registros en la papelera serán borrados definitivamente del sistema.'))return;
+  let errores=[];
+  // Eliminar secciones de papelera (primero inscripciones relacionadas)
+  for(const s of papeleraSecciones){
+    const {error:e1}=await sb.from('inscripciones').delete().eq('seccion_id',s.id);
+    if(e1){errores.push('Inscripciones de sección '+s.codigo_seccion+': '+e1.message);continue;}
+    const {error:e2}=await sb.from('secciones').delete().eq('id',s.id);
+    if(e2)errores.push('Sección '+s.codigo_seccion+': '+e2.message);
+  }
+  // Eliminar asignaturas de papelera
+  for(const a of papeleraAsignaturas){
+    const {error}=await sb.from('asignaturas').delete().eq('id',a.id);
+    if(error)errores.push('Asignatura '+a.nombre+': '+error.message);
+  }
+  if(errores.length){alert('⚠️ Algunos elementos no se pudieron eliminar:\n'+errores.join('\n'));}
+  else{alert('✅ Papelera vaciada correctamente. Se eliminaron '+total+' elemento(s).');}
+  await cargarPapelera();
+  actualizarResumenPapelera();
+}
+
+function actualizarResumenPapelera(){
+  const el=document.getElementById('papelera-resumen-exportar');
+  if(!el)return;
+  const total=papeleraAsignaturas.length+papeleraSecciones.length;
+  if(total===0){el.textContent='La papelera está vacía.';}
+  else{el.textContent='En papelera: '+papeleraAsignaturas.length+' asignatura(s) y '+papeleraSecciones.length+' sección(es).';}
+}
+
+// ===== ARCHIVAR OBSERVACIONES ANTIGUAS =====
+function previewArchivar(){
+  const dias=parseInt(document.getElementById('archivo-corte').value)||90;
+  const corte=new Date(Date.now()-dias*864e5);
+  const antiguas=allObs.filter(o=>new Date(o.creado_en)<corte);
+  const el=document.getElementById('archivo-preview');
+  if(!antiguas.length){el.textContent='No hay observaciones anteriores a '+corte.toLocaleDateString('es-HN')+'.';el.style.color='var(--verde)';}
+  else{el.innerHTML='<b style="color:#c2410c">'+antiguas.length+' observación(es)</b> anteriores al '+corte.toLocaleDateString('es-HN')+' serán archivadas y eliminadas.';el.style.color='';}
+}
+
+async function archivarObsAntiguas(){
+  const dias=parseInt(document.getElementById('archivo-corte').value)||90;
+  const corte=new Date(Date.now()-dias*864e5);
+  const antiguas=allObs.filter(o=>new Date(o.creado_en)<corte);
+  if(!antiguas.length){alert('ℹ️ No hay observaciones anteriores al '+corte.toLocaleDateString('es-HN')+'.');return;}
+  if(!confirm('⚠️ ¿Archivar y eliminar '+antiguas.length+' observación(es) anteriores al '+corte.toLocaleDateString('es-HN')+'?\n\nPRIMERO se descargará un Excel de respaldo con todas ellas.\nLuego serán eliminadas permanentemente.\n\nEsta acción NO se puede deshacer.'))return;
+  // 1. Descargar respaldo primero
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(obsToRows(antiguas)),'Observaciones archivadas');
+  XLSX.writeFile(wb,'BioField_Archivo_Obs_hasta_'+corte.toISOString().slice(0,10)+'.xlsx');
+  // 2. Pedir confirmación final tras descarga
+  await new Promise(r=>setTimeout(r,800));
+  if(!confirm('📥 El archivo de respaldo fue descargado.\n\n¿Proceder con la eliminación de las '+antiguas.length+' observaciones del sistema?'))return;
+  // 3. Eliminar en lotes de 50
+  const ids=antiguas.map(o=>o.id);
+  let errCount=0;
+  for(let i=0;i<ids.length;i+=50){
+    const lote=ids.slice(i,i+50);
+    const {error}=await sb.from('observaciones').delete().in('id',lote);
+    if(error)errCount++;
+  }
+  if(errCount){alert('⚠️ Algunas observaciones no pudieron eliminarse ('+errCount+' lote(s) con error). Revise la consola.');}
+  else{alert('✅ '+antiguas.length+' observación(es) archivadas y eliminadas correctamente.');}
+  await Promise.all([cargarObs(),cargarPapelera()]);
+  renderTablaObs(allObs);
+  renderKPIs();
+  document.getElementById('archivo-preview').textContent='Seleccione corte para previsualizar.';
+}
+
 // ===== NAVEGACIÓN =====
 function showSection(id){
   document.querySelectorAll('.page-section').forEach(s=>s.classList.remove('active'));
@@ -1805,6 +1953,7 @@ function showSection(id){
   if(id==='secciones'){cargarInscripciones().then(renderTablaSecciones);}
   if(id==='estadisticas')setTimeout(renderEstadisticas,120);
   if(id==='papelera')cargarPapelera();
+  if(id==='exportar'){actualizarResumenPapelera();}
 }
 
 // ===== AUTO-SESSION =====
