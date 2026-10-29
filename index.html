@@ -113,6 +113,21 @@ html,body{height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var
 /* MAP */
 #map{height:280px;border-radius:8px;border:1px solid var(--border)}
 #map-live{height:440px;border-radius:8px;border:1px solid var(--border)}
+#mapa-layout{display:flex;gap:12px;align-items:flex-start}
+#mapa-layout #map-live{flex:1;min-width:0}
+#lista-puntos-mapa{width:220px;flex-shrink:0;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);overflow:hidden}
+#lista-puntos-mapa .lpm-header{background:var(--azul);color:#fff;padding:8px 12px;font-size:13px;font-weight:700}
+#lista-puntos-mapa .lpm-body{max-height:440px;overflow-y:auto}
+#lista-puntos-mapa .lpm-item{display:flex;align-items:flex-start;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;font-size:12px}
+#lista-puntos-mapa .lpm-item:last-child{border-bottom:none}
+#lista-puntos-mapa .lpm-item:hover{background:var(--azul-light)}
+#lista-puntos-mapa .lpm-item .lpm-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-top:3px;border:1.5px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.2)}
+#lista-puntos-mapa .lpm-item .lpm-info .lpm-nombre{font-weight:600;color:var(--azul);line-height:1.3}
+#lista-puntos-mapa .lpm-item .lpm-info .lpm-meta{color:var(--text-muted);font-size:11px}
+#lista-puntos-mapa .lpm-empty{padding:16px;text-align:center;color:var(--text-muted);font-size:12px}
+.coord-link{color:var(--verde);cursor:pointer;text-decoration:none;font-size:11px;white-space:nowrap}
+.coord-link:hover{text-decoration:underline}
+@media(max-width:700px){#mapa-layout{flex-direction:column}#lista-puntos-mapa{width:100%}}
 
 /* TABLES */
 .data-table{width:100%;border-collapse:collapse;font-size:13px}
@@ -614,7 +629,13 @@ a.cf-link:hover #ceit-footer .cf-plate { box-shadow: 0 0 0 1px rgba(255,255,255,
               <span id="map-count" style="font-size:12px;color:var(--text-muted);align-self:center"></span>
             </div>
           </div>
-          <div id="map-live"></div>
+          <div id="mapa-layout">
+            <div id="map-live"></div>
+            <div id="lista-puntos-mapa">
+              <div class="lpm-header">📍 Puntos registrados</div>
+              <div class="lpm-body" id="lpm-body"><div class="lpm-empty">Cargando…</div></div>
+            </div>
+          </div>
         </div>
 
       <div class="footer-area">
@@ -1293,8 +1314,10 @@ function renderMapaResumen(){
 }
 
 // ===== MAPA LIVE =====
+const liveMarkers=[];
 function renderMapaLive(){
   if(mapL)mapL.remove();
+  liveMarkers.length=0;
   mapL=L.map('map-live',{zoomControl:true}).setView([14.07,-87.2],7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:18}).addTo(mapL);
   const cols=['#1D9E75','#1A237E','#E65100','#7B1FA2','#C62828','#00838F','#558B2F','#F57F17'];
@@ -1303,12 +1326,48 @@ function renderMapaLive(){
     const esp=o.nombre_cientifico||o.nombre_comun||'?';
     if(em[esp]===undefined)em[esp]=Object.keys(em).length;
     if(o.latitud&&o.longitud){cnt++;
+      const color=cols[em[esp]%cols.length];
       const pop='<div style="min-width:190px"><b>'+(o.nombre_comun||'Sin nombre')+'</b><br><i>'+(o.nombre_cientifico||'')+'</i><br>'+(o.descripcion||'')+'<br>'+(o.temperatura?'🌡️ '+o.temperatura+'°C  ':'')+( o.humedad?'💧 '+o.humedad+'%  ':'')+(o.condicion_climatica?'☁️ '+o.condicion_climatica:'')+'<br><small>👤 '+(o.profiles?.nombre||'—')+' | 📅 '+new Date(o.creado_en).toLocaleDateString('es-HN')+'</small>'+(o.foto_url?'<br><a href="'+o.foto_url+'" target="_blank">📷 Ver foto</a>':'')+'</div>';
-      L.circleMarker([o.latitud,o.longitud],{radius:7,fillColor:cols[em[esp]%cols.length],color:'#fff',weight:1.5,fillOpacity:.85})
+      const mk=L.circleMarker([o.latitud,o.longitud],{radius:7,fillColor:color,color:'#fff',weight:1.5,fillOpacity:.85})
        .bindPopup(pop).addTo(mapL);
+      liveMarkers.push({obs:o,marker:mk,color});
     }
   });
   document.getElementById('map-count').textContent=cnt+' puntos';
+  renderListaPuntos();
+}
+
+function renderListaPuntos(){
+  const el=document.getElementById('lpm-body');
+  if(!liveMarkers.length){el.innerHTML='<div class="lpm-empty">Sin observaciones georeferenciadas.</div>';return;}
+  const sorted=[...liveMarkers].sort((a,b)=>(a.obs.nombre_comun||a.obs.nombre_cientifico||'').localeCompare(b.obs.nombre_comun||b.obs.nombre_cientifico||'','es'));
+  let h='';
+  sorted.forEach((m,i)=>{
+    const o=m.obs;
+    const nombre=o.nombre_comun||o.nombre_cientifico||'Sin nombre';
+    const cient=o.nombre_comun&&o.nombre_cientifico?'<span class="lpm-meta"><i>'+o.nombre_cientifico+'</i></span>':'';
+    const fecha='<span class="lpm-meta">'+new Date(o.creado_en).toLocaleDateString('es-HN')+'</span>';
+    h+='<div class="lpm-item" onclick="irAlPunto('+i+')" title="'+nombre+' — '+o.latitud+', '+o.longitud+'">';
+    h+='<div class="lpm-dot" style="background:'+m.color+'"></div>';
+    h+='<div class="lpm-info"><div class="lpm-nombre">'+nombre+'</div>'+cient+fecha+'</div>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+  // guardar referencia indexada para irAlPunto
+  el._sorted=sorted;
+}
+
+function irAlPunto(idx){
+  const el=document.getElementById('lpm-body');
+  const sorted=el._sorted;
+  if(!sorted||!sorted[idx])return;
+  const {obs,marker}=sorted[idx];
+  mapL.setView([obs.latitud,obs.longitud],14,{animate:true});
+  marker.openPopup();
+  // highlight item activo
+  document.querySelectorAll('#lpm-body .lpm-item').forEach((el,i)=>{
+    el.style.background=i===idx?'var(--azul-light)':'';
+  });
 }
 
 async function recargarMapa(){await cargarObs();renderMapaLive();}
@@ -1375,12 +1434,27 @@ function renderEstadisticas(){
 // ===== TABLA OBSERVACIONES =====
 function renderTablaObs(obs){
   if(!obs.length){document.getElementById('tabla-obs').innerHTML='<div class="empty"><div class="empty-icon">🌿</div>Sin observaciones para los filtros.</div>';return;}
-  let h='<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Especie común</th><th>Nombre científico</th><th>Sección</th><th>Observador</th><th>Temp/Humedad</th><th>Fecha</th><th>Foto</th></tr></thead><tbody>';
+  let h='<div style="overflow-x:auto"><table class="data-table"><thead><tr><th>Especie común</th><th>Nombre científico</th><th>Sección</th><th>Observador</th><th>Temp/Humedad</th><th>Fecha</th><th>Mapa</th><th>Foto</th></tr></thead><tbody>';
   obs.forEach(o=>{
-    h+='<tr><td><b>'+(o.nombre_comun||'—')+'</b></td><td><i style="color:var(--text-muted)">'+(o.nombre_cientifico||'—')+'</i></td><td>'+(o.secciones?.codigo_seccion||'—')+'</td><td>'+(o.profiles?.nombre||'—')+'</td><td style="font-size:11px;color:var(--text-muted)">'+(o.temperatura?o.temperatura+'°C':'—')+' / '+(o.humedad?o.humedad+'%':'—')+'</td><td style="font-size:11px;white-space:nowrap">'+new Date(o.creado_en).toLocaleDateString('es-HN')+'</td><td>'+(o.foto_url?'<a href="'+o.foto_url+'" target="_blank" style="color:var(--verde)">📷 Ver</a>':'—')+'</td></tr>';
+    const coordCell=o.latitud&&o.longitud
+      ?'<a class="coord-link" onclick="irAlMapaDesdeObs('+o.latitud+','+o.longitud+',\''+encodeURIComponent(o.nombre_comun||o.nombre_cientifico||'Punto')+'\')" title="'+o.latitud.toFixed(5)+', '+o.longitud.toFixed(5)+'">📍 Ver</a>'
+      :'<span style="color:var(--text-muted);font-size:11px">—</span>';
+    h+='<tr><td><b>'+(o.nombre_comun||'—')+'</b></td><td><i style="color:var(--text-muted)">'+(o.nombre_cientifico||'—')+'</i></td><td>'+(o.secciones?.codigo_seccion||'—')+'</td><td>'+(o.profiles?.nombre||'—')+'</td><td style="font-size:11px;color:var(--text-muted)">'+(o.temperatura?o.temperatura+'°C':'—')+' / '+(o.humedad?o.humedad+'%':'—')+'</td><td style="font-size:11px;white-space:nowrap">'+new Date(o.creado_en).toLocaleDateString('es-HN')+'</td><td>'+coordCell+'</td><td>'+(o.foto_url?'<a href="'+o.foto_url+'" target="_blank" style="color:var(--verde)">📷 Ver</a>':'—')+'</td></tr>';
   });
   h+='</tbody></table></div>';
   document.getElementById('tabla-obs').innerHTML=h;
+}
+
+function irAlMapaDesdeObs(lat,lng,nombre){
+  showSection('mapa');
+  // Esperar inicialización del mapa (120ms) + render (200ms) = 400ms total
+  setTimeout(()=>{
+    if(mapL){
+      mapL.setView([lat,lng],14,{animate:true});
+      const match=liveMarkers.find(m=>Math.abs(m.obs.latitud-lat)<0.00001&&Math.abs(m.obs.longitud-lng)<0.00001);
+      if(match){setTimeout(()=>match.marker.openPopup(),250);}
+    }
+  },450);
 }
 
 function filtrarObservaciones(){
